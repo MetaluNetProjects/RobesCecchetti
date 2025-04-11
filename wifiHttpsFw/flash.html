@@ -1,0 +1,360 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8" />
+    <title>Robes control room</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <style>
+* {
+  box-sizing: border-box;
+}
+
+body {
+  font-family: Arial, Helvetica, sans-serif;
+}
+
+/* Style the header */
+header {
+  background-color: #444;
+  padding: 1px;
+  text-align: center;
+  font-size: 20px;
+  color: #d55;
+}
+
+/* Container for flexboxes */
+section {
+  display: -webkit-flex;
+  display: flex;
+}
+
+/* Style the navigation menu */
+nav {
+  -webkit-flex: 1;
+  -ms-flex: 1;
+  flex: 3;
+  background: #ccc;
+  padding: 5px;
+}
+
+/* Style the list inside the menu */
+nav ul {
+  list-style-type: none;
+  padding: 0;
+}
+
+/* Style the content */
+article {
+  -webkit-flex: 3;
+  -ms-flex: 3;
+  flex: 1;
+  background-color: #f1f1f1;
+  padding: 10px;
+}
+
+/* Style the footer */
+footer {
+  background-color: #777;
+  padding: 10px;
+  text-align: center;
+  color: white;
+}
+
+/* Responsive layout - makes the menu and the content (inside the section) sit on top of each other instead of next to each other */
+@media (max-width: 600px) {
+  section {
+    -webkit-flex-direction: column;
+    flex-direction: column;
+  }
+}
+
+#moncanvas {
+  background-color: #CCC;
+}
+#monitor {
+  background-color: #555;
+  color: white;
+}
+
+.button {
+  padding: 10px;
+  font-size: 16px;
+}
+
+.switch {
+  position: relative;
+  width: 34px;
+  height: 34px;
+}
+.slider {
+  width: 50%;
+  height: 20px;
+}
+.ctldiv {
+  padding: 5px;
+}
+
+label{
+  vertical-align:50%;
+  font-size: 16px;
+  font-weight: normal;
+}
+
+    </style>
+</head>
+<body>
+
+<header>
+  <h2>Robes control room</h2>
+</header>
+
+<section>
+  <nav>
+    <ul>
+    <h1>Controls &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+        <input type="checkbox" class="switch" id="run" value="RUN"/>
+        <label for="run">Run sequence</label>
+    </h1>
+
+    <div class="ctldiv">
+        <input type="range" class="slider" id="run_ms" min="5000" max="300000"/>
+        <label>Run time: <output id="run_ms_value">0</output> seconds</label>
+    </div>
+    <div class="ctldiv">
+        <input type="range" class="slider" id="stop_ms" min="5000" max="300000"/>
+        <label>Stop time: <output id="stop_ms_value">0</output> seconds</label>
+    </div>
+    <div class="ctldiv">
+        <input type="range" class="slider" id="accel_ms" min="5000" max="30000"/>
+        <label>Accel time: <output id="accel_ms_value">0</output> seconds</label>
+    </div>
+    <div class="ctldiv">
+        <input type="range" class="slider" id="decel_ms" min="5000" max="30000"/>
+        <label>Decel time: <output id="decel_ms_value">0</output> seconds</label>
+    </div>
+    <div class="ctldiv">
+        <input type="range" class="slider" id="speed" min="5000" max="32767"/>
+        <label>Speed: <output id="speed_value">0</output> %</label>
+    </div>
+    <div class="ctldiv">
+    </div>
+    <div class="ctldiv">
+      <input type="button" class="button" id="save_eeprom" value="SAVE TO EEPROM"/>
+    </div>
+    </ul>
+  </nav>
+
+  <article id='monitor'>
+      <h1>Monitor</h1>
+      <canvas id='moncanvas' width="300" height="300"> </textarea>
+  </article>
+
+  <article>
+      <h1>Log</h1>
+      <textarea id='chatbox' rows=12 cols=40 readonly> </textarea>
+  </article>
+</section>
+
+<footer>
+  <p> metalu.net 2025</p>
+</footer>
+
+<script type="text/javascript">
+const speeds = [0, 0, 0, 0];
+const positions = [0.0, 0.0, 0.0, 0.0];
+const maxspeed = 360 * 15 / 60 * 0.5; // 0.5 * 15 tr/mn
+let canvas = document.getElementById("moncanvas");
+function log(text) {
+    const logbox = document.getElementById("chatbox");
+    logbox.value += text + '\n';
+    logbox.scrollTo( 0, 999999 );
+}
+
+function set_control_ms(control, words) {
+    let ms = parseInt(words.shift());
+    document.getElementById(control).value = ms;
+    update_label_ms(control, ms);
+}
+
+var lastDrawTime;
+function draw(now) {
+    if (!canvas.getContext) return;
+    const ctx = canvas.getContext("2d");
+    const order = [0,1,3,2];
+    let w = canvas.width, h = canvas.height;
+
+    if (!lastDrawTime) { lastDrawTime = now; }
+    var elapsed = now - lastDrawTime;
+    lastDrawTime = now;
+
+    ctx.save();
+    ctx.clearRect(0, 0, w, h);
+    ctx.font = "18px system-ui";
+    ctx.textAlign = "center";
+    //ctx.fillText("elapsed: " + Math.floor(elapsed) + " ms", w / 2, 15);
+    ctx.translate(w/4, h/4);
+    for(i = 0; i < 4; i++) {
+        let x = (w / 2) * (order[i] % 2);
+        let y = (h / 2) * Math.floor(order[i] / 2);
+        ctx.save();
+        ctx.translate(x, y);
+        positions[i] = (positions[i] + (elapsed / 1000.0 * speeds[i] / 32768.0 * maxspeed)) % 360;
+        ctx.rotate(positions[i] * 3.14159 / 180);
+        ctx.beginPath();
+        ctx.arc(0, 0, w / 6, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.fillStyle = "orange";
+        ctx.fillRect(-3, -w / 6, 6, w / 3);
+        ctx.rotate(positions[i] * 3.14159 / -180);
+        ctx.fillStyle = "black";
+        ctx.fillText("speed: " + Math.floor(100 * speeds[i] / 32767.0) + "%", 0, 0);
+        //ctx.fillText("pos: " + Math.floor(positions[i]), 0, 15);
+        ctx.restore();
+    }
+    ctx.restore();
+    requestAnimationFrame(draw);
+}
+
+function get_fraise_chars(words) {
+    const id = parseInt(words.shift());
+    if(id != 1) return;
+    let command = words.shift();
+    //if(command !== "R") return;
+    //command = words.shift();
+    switch(command) {
+        case "run":
+            document.getElementById("run").checked = parseInt(words.shift());
+            break;
+        case "run_ms":
+            set_control_ms("run_ms", words);
+            break;
+        case "stop_ms":
+            set_control_ms("stop_ms", words);
+            break;
+        case "accel_ms":
+            set_control_ms("accel_ms", words);
+            break;
+        case "decel_ms":
+            set_control_ms("decel_ms", words);
+            break;
+        case "speed":
+            let speed = parseInt(words.shift());
+            document.getElementById("speed").value = speed;
+            update_label_speed("speed", speed);
+            break;
+        case "l":
+            if(words[0] === 'eeprom' && words[1] === 'saved') {
+                alert("EEPROM saved!");
+            }
+            break;
+        case "M":
+            let _speeds = words.map(elem=> parseInt(elem, 10));
+            for(i = 0; i < 4; i++) { speeds[i] = _speeds[i]; }
+            //log("speeds: " + speeds);
+            //draw();
+            break;
+    }
+}
+
+function get_fraise_bytes(words) {
+}
+
+class WebSocketHandler {
+    periodic(event) {
+        if(this.count > 5)
+            this.ws.send("hello from websocket");
+        this.count++;
+    }
+
+    get_current_state() {
+        [1,2,3,4,5].forEach(el => this.ws.send("f 1 50 200 " + el));
+        this.ws.send("f 1 45");
+    }
+
+    constructor() {
+        this.count = 0;
+        if (window.location.protocol == "https:") {
+            this.ws = new WebSocket("wss://" + location.hostname + ":443/websocket");
+        }
+        else if (window.location.protocol == "http:") {
+            this.ws = new WebSocket("ws://" + location.hostname + ":80/websocket");
+        }
+        else if (window.location.protocol == "file:") {
+            this.ws = new WebSocket("ws://127.0.0.1:80/websocket");
+        }
+
+        this.ws.onerror = (event) => {
+            console.log("WebSocket error: ", event);
+        };
+
+        this.ws.onopen = (event) => {
+            this.ws.send("P 1 1"); // poll fruit ID 1
+            this.get_current_state();
+        };
+
+        this.ws.onmessage = (event) => {
+            event.data.text().then(text => {
+                //console.log("Message from server " + text);
+                //log("Message: " + text);
+                const words = text.split(" ");
+                const command = words.shift();
+                switch(command) {
+                    case "F": get_fraise_chars(words); break;
+                    case "f": get_fraise_bytes(words); break;
+                    case "D": this.get_current_state(); break; // fruit is detected, get its state
+                }
+            });
+        };
+    }
+}
+let handler = new WebSocketHandler();
+
+function int32_to_bytes(i) {
+    return [i >> 24, (i >> 16) % 255, (i >> 8) % 255, i % 255].join(" ");
+}
+
+function update_label_ms(control, ms) {
+    document.getElementById(control + "_value").textContent = Math.floor(ms / 1000);
+}
+
+function update_label_speed(control, v) {
+    document.getElementById(control + "_value").textContent = Math.floor(100.0 * v / 32767.0);
+}
+
+function format_control(control, num, update_label_func) {
+    let c = document.getElementById(control);
+    c.addEventListener("input", (event) => {
+        log(`${control} ${event.target.value}`);
+        update_label_func(control, event.target.value)
+        handler.ws.send(`f 1 50 ${num} ${int32_to_bytes(event.target.value)}`);
+        log(`f 1 50 ${num} ${int32_to_bytes(event.target.value)}`);
+    });
+}
+
+function send_setting_string(num, value) {
+    let outstr = "f 1 50 " + num;
+    for(i = 0; i < value.length; i++) outstr += " " + value.charCodeAt(i);
+    console.log("send setting: " + outstr);
+    handler.ws.send(outstr);
+}
+
+format_control("run_ms", 1, update_label_ms);
+format_control("stop_ms", 2, update_label_ms);
+format_control("accel_ms", 3, update_label_ms);
+format_control("decel_ms", 4, update_label_ms);
+format_control("speed", 5, update_label_speed);
+
+document.getElementById("run").oninput = function() {
+    handler.ws.send("f 1 40 " + (this.checked ? "1" : "0"));
+}
+
+document.getElementById("save_eeprom").onclick = function() {
+    send_setting_string(255, "EEPROM_SAVE");
+}
+
+chatbox.value='';
+log("Robes control room loaded!");
+requestAnimationFrame(draw);
+</script>
+</body>
+</html>

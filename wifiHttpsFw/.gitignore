@@ -1,0 +1,3 @@
+*.gz
+*.hex
+wifi_config.h

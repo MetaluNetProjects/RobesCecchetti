@@ -1,0 +1,4 @@
+build*/
+*.o
+*.pd_linux
+*.hex
